@@ -1,16 +1,15 @@
-import { Methods, Context } from "./.rtag/methods";
-import { Response } from "./.rtag/base";
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
 import {
   UserId,
   GameStatus,
   Color,
   Piece,
   PlayerState,
-  ICreateGameRequest,
   IStartGameRequest,
   IMovePieceRequest,
   PieceType,
-} from "./.rtag/types";
+} from "../api/types";
 import { Chess, ChessInstance, Piece as ChessPiece, Square } from "chess.js";
 
 type InternalUser = {
@@ -18,16 +17,14 @@ type InternalUser = {
   color: Color;
 };
 type InternalState = {
-  chess: ChessInstance & { _modCnt: number };
+  chess: ChessInstance;
   users: InternalUser[];
+  turnCount: number;
 };
 
 export class Impl implements Methods<InternalState> {
-  createGame(userId: UserId, ctx: Context, request: ICreateGameRequest): InternalState {
-    return {
-      chess: Object.assign(new Chess(), { _modCnt: 0 }),
-      users: [{ name: userId, color: Color.WHITE }],
-    };
+  initialize(userId: UserId, ctx: Context): InternalState {
+    return { chess: new Chess(), users: [{ name: userId, color: Color.WHITE }], turnCount: 0 };
   }
   startGame(state: InternalState, userId: UserId, ctx: Context, request: IStartGameRequest): Response {
     if (state.users.find((u) => u.name === userId) !== undefined) {
@@ -48,7 +45,7 @@ export class Impl implements Methods<InternalState> {
     if (move === null) {
       return Response.error("Invalid move");
     }
-    state.chess._modCnt++;
+    state.turnCount++;
     return Response.ok();
   }
   getUserState(state: InternalState, userId: UserId): PlayerState {

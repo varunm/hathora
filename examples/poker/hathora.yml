@@ -1,0 +1,36 @@
+types:
+  PlayerStatus:
+    - WAITING
+    - FOLDED
+    - PLAYED
+  Card:
+    rank: string
+    suit: string
+  PlayerInfo:
+    id: UserId
+    chipCount: int
+    chipsInPot: int
+    cards: Card[]
+    status: PlayerStatus
+  PlayerState:
+    players: PlayerInfo[]
+    dealer: UserId
+    activePlayer: UserId
+    revealedCards: Card[]
+
+methods:
+  joinGame:
+  startGame:
+    startingChips: int
+    startingBlind: int
+  startRound:
+  fold:
+  call:
+  raise:
+    amount: int
+
+auth:
+  anonymous: {}
+  
+userState: PlayerState
+error: string

@@ -1,0 +1,68 @@
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
+import {
+{{#each types}}
+  {{@key}},
+{{/each}}
+{{#each methods}}
+  {{makeRequestName @key}},
+{{/each}}
+} from "../api/types";
+
+type InternalState = {{userState}};
+
+export class Impl implements Methods<InternalState> {
+  initialize(userId: UserId, ctx: Context): InternalState {
+    {{#with (lookup types userState)}}
+    {{#if (eq type "object")}}
+    return {
+      {{#each properties}}
+      {{@key}}: {{> renderDefault}},
+      {{/each}}
+    };
+    {{else}}
+    return {{> renderDefault}};
+    {{/if}}
+    {{/with}}
+  }
+  {{#each methods}}
+  {{@key}}(state: InternalState, userId: UserId, ctx: Context, request: {{makeRequestName @key}}): Response {
+    return Response.error("Not implemented");
+  }
+  {{/each}}
+  getUserState(state: InternalState, userId: UserId): {{userState}} {
+    return state;
+  }
+  {{#if tick}}
+  onTick(state: InternalState, ctx: Context, timeDelta: number): void {}
+  {{/if}}
+}
+{{#*inline "renderDefault"}}
+{{#if (eq type "array")}}
+[]
+{{~else if (eq type "int")}}
+0
+{{~else if (eq type "float")}}
+0.0
+{{~else if (eq typeString "UserId")}}
+userId
+{{~else if (eq type "string")}}
+""
+{{~else if (eq type "enum")}}
+0
+{{~else if (eq type "boolean")}}
+false
+{{~else if (eq type "optional")}}
+undefined
+{{~else if (eq type "object")}}
+{{typeString}}.default()
+{{~else if (eq type "union")}}
+{{#each options}}
+{{#if @first}}
+{ type: "{{@key}}", val: {{> renderDefault}} }
+{{~/if}}
+{{/each}}
+{{~else if (eq type "plugin")}}
+{{> renderDefault item}}
+{{/if}}
+{{/inline}}

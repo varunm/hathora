@@ -1,16 +1,15 @@
-import { Methods, Context } from "./.rtag/methods";
-import { Response } from "./.rtag/base";
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
 import {
   UserId,
   PlayerState,
-  ICreateGameRequest,
   IJoinGameRequest,
   IStartGameRequest,
   IPlayCardRequest,
   IDrawCardRequest,
   Card,
   Color,
-} from "./.rtag/types";
+} from "../api/types";
 
 type InternalState = {
   deck: Card[];
@@ -22,7 +21,7 @@ type InternalState = {
 };
 
 export class Impl implements Methods<InternalState> {
-  createGame(userId: UserId, ctx: Context, request: ICreateGameRequest): InternalState {
+  initialize(userId: UserId, ctx: Context): InternalState {
     const deck = [];
     for (let i = 2; i <= 9; i++) {
       deck.push({ value: i, color: Color.RED });
@@ -33,18 +32,22 @@ export class Impl implements Methods<InternalState> {
     return { deck, players: [userId], hands: new Map(), turn: userId };
   }
   joinGame(state: InternalState, userId: UserId, ctx: Context, request: IJoinGameRequest): Response {
-    if (state.players.find((playerName) => playerName === userId) !== undefined) {
+    if (state.players.find((playerId) => playerId === userId) !== undefined) {
       return Response.error("Already joined");
     }
     state.players.push(userId);
     return Response.ok();
   }
   startGame(state: InternalState, userId: UserId, ctx: Context, request: IStartGameRequest): Response {
-    state.deck = shuffle(ctx.randInt, state.deck);
-    state.players.forEach((playerName) => {
-      state.hands.set(playerName, []);
+    if (state.pile !== undefined) {
+      return Response.error("Already started");
+    }
+    state.deck = ctx.chance.shuffle(state.deck);
+    // give each player 7 cards
+    state.players.forEach((playerId) => {
+      state.hands.set(playerId, []);
       for (let i = 0; i < 7; i++) {
-        state.hands.get(playerName)!.push(state.deck.pop()!);
+        state.hands.get(playerId)!.push(state.deck.pop()!);
       }
     });
     state.pile = state.deck.pop();
@@ -78,7 +81,13 @@ export class Impl implements Methods<InternalState> {
     return Response.ok();
   }
   drawCard(state: InternalState, userId: UserId, ctx: Context, request: IDrawCardRequest): Response {
-    const hand = state.hands.get(userId)!;
+    if (state.deck.length === 0) {
+      return Response.error("Deck is empty");
+    }
+    const hand = state.hands.get(userId);
+    if (hand === undefined) {
+      return Response.error("Invalid user");
+    }
     hand.push(state.deck.pop()!);
     return Response.ok();
   }
@@ -91,13 +100,4 @@ export class Impl implements Methods<InternalState> {
       winner: state.winner,
     };
   }
-}
-
-function shuffle<T>(randInt: (limit: number) => number, items: T[]) {
-  const shuffled = [...items];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = randInt(i + 1);
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
 }

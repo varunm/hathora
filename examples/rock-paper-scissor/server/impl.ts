@@ -1,17 +1,16 @@
-import { Methods, Context } from "./.rtag/methods";
-import { Response } from "./.rtag/base";
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
 import {
   UserId,
   PlayerState,
-  ICreateGameRequest,
   IJoinGameRequest,
   IChooseGestureRequest,
   INextRoundRequest,
   Gesture,
-} from "./.rtag/types";
+} from "../api/types";
 
 export class Impl implements Methods<PlayerState> {
-  createGame(userId: UserId, ctx: Context, request: ICreateGameRequest): PlayerState {
+  initialize(userId: UserId, ctx: Context): PlayerState {
     return { round: 0, player1: { id: userId, score: 0 } };
   }
   joinGame(state: PlayerState, userId: UserId, ctx: Context, request: IJoinGameRequest): Response {

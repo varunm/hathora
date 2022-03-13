@@ -1,0 +1,63 @@
+import onChange from "on-change";
+import { Context } from "./methods";
+import { Method } from "../../api/base";
+import {
+  UserId,
+  {{#each methods}}
+  {{makeRequestName @key}},
+  {{/each}}
+} from "../../api/types";
+
+let impl = new (await import("../impl")).Impl();
+export type State = ReturnType<typeof impl.initialize>;
+
+let changedAt: number | undefined = undefined;
+
+export const ImplWrapper = {
+  async initialize(userId: UserId, ctx: Context) {
+    await tryReloadImpl();
+    const state = impl.initialize(userId, ctx);
+    return onChange(state, () => (changedAt = Date.now()));
+  },
+  async getResult(state: State, userId: UserId, method: Method, ctx: Context, argsBuffer: ArrayBufferView) {
+    await tryReloadImpl();
+    switch (method) {
+      {{#each methods}}
+      case Method.{{uppercase @key}}:
+        return impl.{{@key}}(state, userId, ctx, {{makeRequestName @key}}.decode(argsBuffer));
+      {{/each}}
+    }
+  },
+  {{#if tick}}
+  async onTick(state: State, ctx: Context, timeDelta: number) {
+    await tryReloadImpl();
+    impl.onTick(state, ctx, timeDelta);
+  },
+  {{/if}}
+  async getUserState(state: State, userId: UserId) {
+    await tryReloadImpl();
+    return impl.getUserState(onChange.target(state), userId);
+  },
+  changedAt(): number | undefined {
+    const res = changedAt;
+    changedAt = undefined;
+    return res;
+  },
+};
+
+let prevError = "";
+async function tryReloadImpl() {
+  try {
+    impl = new (await import("../impl")).Impl();
+    if (prevError !== "") {
+      console.log("Successfully reloaded impl");
+      prevError = "";
+    }
+  } catch (e) {
+    const errorString = (e as any).toString();
+    if (errorString !== prevError) {
+      console.error("Error reloading impl: " + e);
+      prevError = errorString;
+    }
+  }
+}

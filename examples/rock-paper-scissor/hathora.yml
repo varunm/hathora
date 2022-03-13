@@ -1,0 +1,25 @@
+types:
+  Gesture:
+    - ROCK
+    - PAPER
+    - SCISSOR
+  PlayerInfo:
+    id: UserId
+    score: int
+    gesture: Gesture?
+  PlayerState:
+    round: int
+    player1: PlayerInfo
+    player2: PlayerInfo?
+
+methods:
+  joinGame:
+  chooseGesture:
+    gesture: Gesture
+  nextRound:
+
+auth:
+  anonymous: {}
+
+userState: PlayerState
+error: string

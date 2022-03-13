@@ -1,0 +1,27 @@
+import { Chance } from "chance";
+import { Response } from "../../api/base";
+import {
+  UserId,
+  {{userState}} as UserState,
+  {{#each methods}}
+  {{makeRequestName @key}},
+  {{/each}}
+} from "../../api/types";
+
+export interface Context {
+  chance: ReturnType<typeof Chance>;
+  time: number;
+  sendEvent: (event: string, to: UserId) => void;
+  broadcastEvent: (event: string) => void;
+}
+
+export interface Methods<T> {
+  initialize(userId: UserId, ctx: Context): T;
+  {{#each methods}}
+  {{@key}}(state: T, userId: UserId, ctx: Context, request: {{makeRequestName @key}}): Response;
+  {{/each}}
+  getUserState(state: T, userId: UserId): UserState;
+  {{#if tick}}
+  onTick(state: T, ctx: Context, timeDelta: number): void;
+  {{/if}}
+}

@@ -5,18 +5,17 @@ import { z } from "zod";
 import { join, basename } from "path";
 
 const TypeArgs = z.union([z.string(), z.array(z.string()), z.record(z.string())]);
-const RtagConfig = z
+const HathoraConfig = z
   .object({
     types: z.record(TypeArgs),
     methods: z.record(z.nullable(z.record(z.string()))),
     auth: z
       .object({
-        anonymous: z.optional(z.object({ separator: z.string() }).strict()),
+        anonymous: z.optional(z.object({ separator: z.optional(z.string()).default("-") }).strict()),
         google: z.optional(z.object({ clientId: z.string() }).strict()),
       })
       .strict(),
     userState: z.string(),
-    initialize: z.string(),
     error: z.string(),
     tick: z.optional(z.number().int().gte(50)),
   })
@@ -91,7 +90,7 @@ interface BooleanArg {
 }
 
 function getArgsInfo(
-  doc: z.infer<typeof RtagConfig>,
+  doc: z.infer<typeof HathoraConfig>,
   plugins: string[],
   args: z.infer<typeof TypeArgs>,
   alias: boolean,
@@ -148,7 +147,7 @@ function getArgsInfo(
   }
 }
 
-function enrichDoc(doc: z.infer<typeof RtagConfig>, plugins: string[], appName: string) {
+function enrichDoc(doc: z.infer<typeof HathoraConfig>, plugins: string[], appName: string) {
   doc.types["UserId"] = "string";
   return {
     ...doc,
@@ -172,27 +171,24 @@ function enrichDoc(doc: z.infer<typeof RtagConfig>, plugins: string[], appName: 
   };
 }
 
-export function generate(rootDir: string, templatesDir: string) {
+export function generate(rootDir: string, templatesDir: string, args: Record<string, string> = {}) {
   const clientDir = join(rootDir, "client");
-  const doc = RtagConfig.parse(load(readFileSync(join(rootDir, "rtag.yml"), "utf8")));
+  const doc = HathoraConfig.parse(load(readFileSync(join(rootDir, "hathora.yml"), "utf8")));
   if (!Object.keys(doc.types).includes(doc.userState)) {
     throw new Error("Invalid userState");
   }
-  if (!Object.keys(doc.methods).includes(doc.initialize)) {
-    throw new Error("Invalid initialize");
-  }
 
-  const plugins = existsSync(join(clientDir, "plugins"))
-    ? readdirSync(join(clientDir, "plugins")).map((p) => p.replace(/\..*$/, ""))
-    : [];
+  const pluginsDir = join(clientDir, "prototype-ui", "plugins");
+  const plugins = existsSync(pluginsDir) ? readdirSync(pluginsDir).map((p) => p.replace(/\..*$/, "")) : [];
   const appName = basename(rootDir);
-  const enrichedDoc = enrichDoc(doc, plugins, appName);
+  const enrichedDoc = { ...enrichDoc(doc, plugins, appName), ...args };
 
   function codegen(inDir: string, outDir: string) {
     readdirSync(inDir).forEach((f) => {
       const file = join(inDir, f);
       if (statSync(file).isDirectory()) {
-        codegen(file, join(outDir, f));
+        const outFile = f.replace(/\{\{(.+)\}\}/, (_, val) => (val in args ? args[val] : ""));
+        codegen(file, join(outDir, outFile));
       } else {
         const template = compile(readFileSync(file, "utf8"));
         outputFileSync(join(outDir, f.split(".hbs")[0]), template(enrichedDoc));

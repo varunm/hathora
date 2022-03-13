@@ -1,9 +1,8 @@
-import { Methods, Context } from "./.rtag/methods";
-import { Response } from "./.rtag/base";
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
 import {
   UserId,
   PlayerState,
-  ICreateGameRequest,
   IJoinGameRequest,
   IStartGameRequest,
   IProposeQuestRequest,
@@ -14,8 +13,7 @@ import {
   GameStatus,
   QuestAttempt,
   QuestStatus,
-} from "./.rtag/types";
-import { shuffle } from "./utils";
+} from "../api/types";
 
 type InternalQuestAttempt = {
   roundNumber: number;
@@ -55,13 +53,8 @@ const QUEST_CONFIGURATIONS = new Map([
 ]);
 
 export class Impl implements Methods<InternalState> {
-  createGame(userId: UserId, ctx: Context, request: ICreateGameRequest): InternalState {
-    return {
-      creator: userId,
-      players: [userId],
-      roles: new Map(),
-      quests: [],
-    };
+  initialize(userId: UserId, ctx: Context): InternalState {
+    return { creator: userId, players: [userId], roles: new Map(), quests: [] };
   }
   joinGame(state: InternalState, userId: UserId, ctx: Context, request: IJoinGameRequest): Response {
     if (state.players.find((player) => player === userId) !== undefined) {
@@ -92,10 +85,10 @@ export class Impl implements Methods<InternalState> {
       }
       state.players = request.playerOrder;
     } else {
-      state.players = shuffle(ctx.randInt, state.players);
+      state.players = ctx.chance.shuffle(state.players);
     }
-    state.roles = new Map(shuffle(ctx.randInt, request.roleList).map((role, i) => [state.players[i], role]));
-    const leader = request.leader ?? state.players[ctx.randInt(state.players.length)];
+    state.roles = new Map(ctx.chance.shuffle(request.roleList).map((role, i) => [state.players[i], role]));
+    const leader = request.leader ?? ctx.chance.pickone(state.players);
     state.quests.push(createQuest(1, 1, state.players.length, leader));
     return Response.ok();
   }

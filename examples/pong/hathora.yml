@@ -1,0 +1,26 @@
+types:
+  Direction:
+    - NONE
+    - UP
+    - DOWN
+  Point:
+    x: float
+    y: float
+  Player:
+    paddle: float
+    score: int
+  PlayerState:
+    playerA: Player
+    playerB: Player
+    ball: Point
+
+methods:
+  setDirection:
+    direction: Direction
+
+auth:
+  anonymous: {}
+
+userState: PlayerState
+error: string
+tick: 50
