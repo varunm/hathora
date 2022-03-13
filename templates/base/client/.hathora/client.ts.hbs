@@ -1,0 +1,136 @@
+import WebSocket from "isomorphic-ws";
+// @ts-ignore
+import getRandomValues from "get-random-values";
+import axios from "axios";
+import jwtDecode from "jwt-decode";
+import { ConnectionFailure, transformCoordinatorFailure } from "./failures";
+import { computePatch } from "./patch";
+import { UserData, Response, Method, COORDINATOR_HOST } from "../../api/base";
+import {
+  decodeStateSnapshot,
+  decodeStateUpdate,
+  {{userState}} as UserState,
+  {{#each methods}}
+  {{makeRequestName @key}},
+  {{/each}}
+} from "../../api/types";
+
+export type StateId = string;
+export type UpdateArgs = { stateId: StateId; state: UserState; updatedAt: number; events: string[] };
+
+export class HathoraClient {
+  public appId = "{{appId}}";
+
+  public static getUserFromToken(token: string): UserData {
+    return jwtDecode(token);
+  }
+
+{{#each auth}}
+{{#if (eq @key "anonymous")}}
+  public async loginAnonymous(): Promise<string> {
+    const res = await axios.post(`https://${COORDINATOR_HOST}/${this.appId}/login/anonymous`);
+    return res.data.token;
+  }
+
+{{else if (eq @key "google")}}
+  public async loginGoogle(idToken: string): Promise<string> {
+    const res = await axios.post(`https://${COORDINATOR_HOST}/${this.appId}/login/google`, { idToken });
+    return res.data.token;
+  }
+
+{{/if}}
+{{/each}}
+  public connectNew(
+    token: string,
+    onUpdate: (updateArgs: UpdateArgs) => void,
+    onConnectionFailure: (failure: ConnectionFailure) => void
+  ): Promise<HathoraConnection> {
+    return new Promise((resolve) => {
+      const socket = this.initSocket(onConnectionFailure);
+      socket.onopen = () => {
+        socket.send(token);
+        socket.send(new Uint8Array());
+      };
+      socket.onmessage = ({ data }) => resolve(new HathoraConnection(data as StateId, socket, onUpdate));
+    });
+  }
+
+  public connectExisting(
+    token: string,
+    stateId: StateId,
+    onUpdate: (updateArgs: UpdateArgs) => void,
+    onConnectionFailure: (failure: ConnectionFailure) => void
+  ): HathoraConnection {
+    const socket = this.initSocket(onConnectionFailure);
+    socket.onopen = () => {
+      socket.send(token);
+      socket.send(stateId);
+    };
+    return new HathoraConnection(stateId, socket, onUpdate);
+  }
+
+  private initSocket(onConnectionFailure: (failure: ConnectionFailure) => void) {
+    const socket = new WebSocket(`wss://${COORDINATOR_HOST}/${this.appId}`);
+    socket.binaryType = "arraybuffer";
+    socket.onclose = (e) => onConnectionFailure(transformCoordinatorFailure(e));
+    return socket;
+  }
+}
+
+export class HathoraConnection {
+  private callbacks: Record<string, (response: Response) => void> = {};
+  private state?: UserState = undefined;
+  private changedAt = 0;
+
+  public constructor(public stateId: StateId, private socket: WebSocket, onUpdate: (updateArgs: UpdateArgs) => void) {
+    socket.onmessage = ({ data }) => {
+      if (this.state === undefined) {
+        this.state = decodeStateSnapshot(new Uint8Array(data as ArrayBuffer));
+        onUpdate({ stateId, state: JSON.parse(JSON.stringify(this.state)), updatedAt: 0, events: [] });
+        return;
+      }
+      const { stateDiff, changedAtDiff, responses, events } = decodeStateUpdate(new Uint8Array(data as ArrayBuffer));
+      if (stateDiff !== undefined) {
+        this.state = computePatch(this.state, stateDiff);
+      }
+      this.changedAt += changedAtDiff;
+      onUpdate({
+        stateId,
+        state: JSON.parse(JSON.stringify(this.state)),
+        updatedAt: this.changedAt,
+        events: events.map((e) => e.event),
+      });
+      responses.forEach(({ msgId, response }) => {
+        if (msgId in this.callbacks) {
+          this.callbacks[msgId](response);
+          delete this.callbacks[msgId];
+        }
+      });
+    };
+  }
+
+  {{#each methods}}
+  public {{@key}}(request: {{makeRequestName @key}}): Promise<Response> {
+    return this.callMethod(Method.{{uppercase @key}}, {{makeRequestName @key}}.encode(request).toBuffer());
+  }
+
+  {{/each}}
+  public disconnect(): void {
+    this.socket.onclose = () => {};
+    this.socket.close();
+  }
+
+  private callMethod(method: Method, request: Uint8Array): Promise<Response> {
+    return new Promise((resolve, reject) => {
+      if (this.socket.readyState === this.socket.CLOSED) {
+        reject("Connection is closed");
+      } else if (this.socket.readyState !== this.socket.OPEN) {
+        setTimeout(() => this.callMethod(method, request).then(resolve).catch(reject), 0);
+      } else {
+        const msgId: Uint8Array = getRandomValues(new Uint8Array(4));
+        this.socket.send(new Uint8Array([...new Uint8Array([method]), ...msgId, ...request]));
+        this.callbacks[new DataView(msgId.buffer).getUint32(0)] = resolve;
+      }
+    });
+  }
+}

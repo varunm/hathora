@@ -1,10 +1,10 @@
-import { Methods, Context } from "./.rtag/methods";
-import { Response } from "./.rtag/base";
-import { UserId, Direction, PlayerState, ICreateGameRequest, ISetDirectionRequest, Player, Point } from "./.rtag/types";
+import { Methods, Context } from "./.hathora/methods";
+import { Response } from "../api/base";
+import { UserId, Direction, PlayerState, ISetDirectionRequest, Player, Point } from "../api/types";
 
 const MAP_WIDTH = 600;
 const MAP_HEIGHT = 400;
-const PADDLE_HEIGHT = 50;
+const PADDLE_HEIGHT = 60;
 const PADDLE_SPEED = 100;
 const BALL_SPEED = 250;
 
@@ -15,11 +15,11 @@ type InternalState = {
 };
 
 export class Impl implements Methods<InternalState> {
-  createGame(userId: UserId, ctx: Context, request: ICreateGameRequest): InternalState {
+  initialize(userId: UserId, ctx: Context): InternalState {
     return {
       playerA: { id: userId, direction: Direction.NONE, paddle: MAP_HEIGHT / 2, score: 0 },
       playerB: { direction: Direction.NONE, paddle: MAP_HEIGHT / 2, score: 0 },
-      ball: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2, angle: ctx.rand() * 2 * Math.PI },
+      ball: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2, angle: ctx.chance.floating({ min: 0, max: 2 * Math.PI }) },
     };
   }
   setDirection(state: InternalState, userId: UserId, ctx: Context, request: ISetDirectionRequest): Response {
